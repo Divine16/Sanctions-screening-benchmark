@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+title: "sanctions-screening-benchmark: a reproducible benchmark for name-screening effectiveness"
+message: "If you use this software or its results, please cite it."
+type: software
+authors:
+  - given-names: "DIVINE"
+    family-names: "LINUS"
+    orcid: "https://orcid.org/0009-0006-7734-3011"
+repository-code: "https://github.com/Divine16/sanctions-screening-benchmark"
+abstract: >-
+  An open, reproducible benchmark for measuring sanctions name-screening
+  effectiveness against documented classes of name variation. Generates
+  positive test cases by applying eighteen perturbation classes — spanning
+  benign transliteration and naming-convention variation, adversarial Unicode
+  evasion, and upstream system degradation — to names retrieved from published
+  sanctions lists, together with synthetic negative controls. Reports a
+  class-wise recall profile rather than a single accuracy figure, on the basis
+  that the identity of a screening failure is more actionable than its
+  magnitude.
+keywords:
+  - sanctions
+  - screening
+  - name matching
+  - anti-money laundering
+  - financial crime
+  - entity resolution
+license: MIT
+version: 0.1.0
