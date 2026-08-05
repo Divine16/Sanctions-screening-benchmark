@@ -4,7 +4,7 @@ test:
 	python3 -m unittest discover -s tests -t . -v
 
 demo:
-	PYTHONPATH=src python3 -m ssb.cli demo
+	PYTHONPATH=src python3 -m ssb.cli demo  
 
 classes:
 	PYTHONPATH=src python3 -m ssb.cli classes
