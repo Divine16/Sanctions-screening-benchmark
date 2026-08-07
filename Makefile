@@ -1,4 +1,4 @@
-.PHONY: test demo classes generate compare clean
+.PHONY: test demo classes generate compare sweep clean
 
 test:
 	python3 -m unittest discover -s tests -t . -v
@@ -15,6 +15,10 @@ generate:
 compare:
 	PYTHONPATH=src python3 -m ssb.cli generate --offline --limit 10 --max-per-class 1 --out /tmp/ssb-bench.json
 	PYTHONPATH=src python3 -m ssb.cli compare /tmp/ssb-bench.json --a exact --b baseline
+
+sweep:
+	PYTHONPATH=src python3 -m ssb.cli generate --offline --limit 10 --max-per-class 1 --out /tmp/ssb-bench.json
+	PYTHONPATH=src python3 -m ssb.cli sweep /tmp/ssb-bench.json --from-threshold 0.7 --to-threshold 0.95 --step 0.05
 
 clean:
 	rm -f benchmark.json scorecard.json

@@ -198,5 +198,49 @@ class TestCompare(unittest.TestCase):
             self.assertGreater(row.n, 0)
 
 
+class TestSweep(unittest.TestCase):
+    def setUp(self):
+        self.snap = sources.load_fixture()
+        self.bench = bm.build(self.snap, limit=None, seed=0, max_per_class=1)
+
+    def test_default_threshold_grid(self):
+        thresholds = bm.default_thresholds(0.50, 0.95, 0.05)
+        self.assertEqual(thresholds[0], 0.5)
+        self.assertEqual(thresholds[-1], 0.95)
+        self.assertEqual(len(thresholds), 10)
+
+    def test_parse_thresholds_accepts_list(self):
+        self.assertEqual(bm.parse_thresholds("0.8,0.85,0.9"), [0.8, 0.85, 0.9])
+
+    def test_sweep_recall_increases_with_lower_threshold(self):
+        result = bm.sweep(
+            self.bench,
+            matching.BaselineMatcher(),
+            thresholds=[0.95, 0.50],
+        )
+        high_threshold = result.points[0]
+        low_threshold = result.points[1]
+        self.assertGreaterEqual(low_threshold.recall, high_threshold.recall)
+
+    def test_sweep_marks_best_f1(self):
+        result = bm.sweep(
+            self.bench,
+            matching.BaselineMatcher(),
+            thresholds=[0.70, 0.85, 0.95],
+        )
+        text = bm.format_sweep(result)
+        self.assertIn("THRESHOLD SWEEP", text)
+        self.assertIn("best F1", text)
+        self.assertEqual(result.best_f1.threshold, max(result.points, key=lambda p: p.f1).threshold)
+
+    def test_score_matches_sweep_at_same_threshold(self):
+        threshold = 0.85
+        sc = bm.score(self.bench, matching.BaselineMatcher(), threshold=threshold)
+        point = next(p for p in bm.sweep(self.bench, matching.BaselineMatcher(), thresholds=[threshold]).points)
+        self.assertAlmostEqual(sc.overall_recall, point.recall)
+        self.assertAlmostEqual(sc.overall_precision, point.precision)
+        self.assertAlmostEqual(sc.false_positive_rate, point.false_positive_rate)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

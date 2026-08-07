@@ -89,6 +89,10 @@ PYTHONPATH=src python3 -m ssb.cli compare benchmark.json --a exact --b baseline
 PYTHONPATH=src python3 -m ssb.cli evaluate benchmark.json --save scorecard-a.json --matcher exact
 PYTHONPATH=src python3 -m ssb.cli evaluate benchmark.json --save scorecard-b.json --matcher baseline
 PYTHONPATH=src python3 -m ssb.cli compare --scorecard-a scorecard-a.json --scorecard-b scorecard-b.json
+
+# Sweep thresholds to find a recall/precision trade-off
+PYTHONPATH=src python3 -m ssb.cli sweep benchmark.json --matcher baseline
+PYTHONPATH=src python3 -m ssb.cli sweep benchmark.json --thresholds 0.7,0.8,0.85,0.9,0.95
 ```
 
 Run the tests:

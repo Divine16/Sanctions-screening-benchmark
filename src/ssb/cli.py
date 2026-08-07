@@ -111,6 +111,25 @@ def cmd_compare(args) -> int:
     return 0
 
 
+def cmd_sweep(args) -> int:
+    bench = bm.Benchmark.from_json(args.benchmark)
+    matcher = {"baseline": matching.BaselineMatcher(), "exact": matching.ExactMatcher()}[args.matcher]
+    try:
+        thresholds = bm.parse_thresholds(args.thresholds, args.from_threshold, args.to_threshold, args.step)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    result = bm.sweep(bench, matcher, thresholds=thresholds)
+    if args.json:
+        print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))
+    else:
+        print(bm.format_sweep(result))
+    if args.save:
+        Path(args.save).write_text(json.dumps(result.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"sweep written to {args.save}", file=sys.stderr)
+    return 0
+
+
 def cmd_demo(args) -> int:
     """Generate from the fixture and evaluate. No network needed."""
     snapshot = sources.load_fixture()
@@ -164,6 +183,17 @@ def main(argv=None) -> int:
     p.add_argument("--threshold", type=float, default=0.85)
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_compare)
+
+    p = sub.add_parser("sweep", help="score a matcher across a range of thresholds")
+    p.add_argument("benchmark")
+    p.add_argument("--matcher", default="baseline", choices=["baseline", "exact"])
+    p.add_argument("--thresholds", default=None, help="comma-separated thresholds, e.g. 0.7,0.8,0.9")
+    p.add_argument("--from-threshold", type=float, default=0.50, dest="from_threshold")
+    p.add_argument("--to-threshold", type=float, default=0.95, dest="to_threshold")
+    p.add_argument("--step", type=float, default=0.05)
+    p.add_argument("--json", action="store_true")
+    p.add_argument("--save", default=None)
+    p.set_defaults(func=cmd_sweep)
 
     p = sub.add_parser("demo", help="generate and evaluate against the offline fixture")
     p.add_argument("--seed", type=int, default=0)
