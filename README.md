@@ -101,6 +101,8 @@ Run the tests:
 python3 -m unittest discover -s tests -t .
 ```
 
+See [CHANGELOG.md](CHANGELOG.md) for release history.
+
 ## Scoring your own engine
 
 Any callable of the shape `(query: str, candidate: str) -> float` in `[0, 1]`
