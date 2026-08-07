@@ -1,5 +1,6 @@
 """Test suite. Runs entirely offline against the synthetic fixture."""
 
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -161,6 +162,40 @@ class TestSourcesAndBenchmark(unittest.TestCase):
         text = bm.format_scorecard(bm.score(b, matching.BaselineMatcher()))
         self.assertIn("SCORECARD", text)
         self.assertIn("RECALL", text)
+
+
+class TestCompare(unittest.TestCase):
+    def setUp(self):
+        self.snap = sources.load_fixture()
+        self.bench = bm.build(self.snap, limit=None, seed=0, max_per_class=1)
+
+    def test_compare_shows_delta(self):
+        exact = bm.score(self.bench, matching.ExactMatcher(), threshold=0.85)
+        base = bm.score(self.bench, matching.BaselineMatcher(), threshold=0.85)
+        text = bm.format_comparison(exact, base)
+        self.assertIn("COMPARISON", text)
+        self.assertIn("DELTA", text)
+        self.assertGreater(base.overall_recall, exact.overall_recall)
+
+    def test_scorecard_roundtrip_via_from_json(self):
+        import os
+        import tempfile
+
+        sc = bm.score(self.bench, matching.BaselineMatcher(), threshold=0.85)
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "sc.json")
+            Path(p).write_text(json.dumps(sc.to_dict(), ensure_ascii=False), encoding="utf-8")
+            loaded = bm.Scorecard.from_json(p)
+        self.assertEqual(loaded.matcher, sc.matcher)
+        self.assertEqual(len(loaded.by_class), len(sc.by_class))
+
+    def test_compare_rows_align_by_class(self):
+        exact = bm.score(self.bench, matching.ExactMatcher(), threshold=0.85)
+        base = bm.score(self.bench, matching.BaselineMatcher(), threshold=0.85)
+        rows = bm.compare(exact, base)
+        self.assertTrue(rows)
+        for row in rows:
+            self.assertGreater(row.n, 0)
 
 
 if __name__ == "__main__":

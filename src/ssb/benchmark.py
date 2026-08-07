@@ -197,6 +197,28 @@ class Scorecard:
             "manifest": asdict(self.manifest),
         }
 
+    @classmethod
+    def from_dict(cls, payload: dict) -> Scorecard:
+        by_class = [
+            ClassResult(c["perturbation"], c["family"], c["n"], c["hits"])
+            for c in payload["by_class"]
+        ]
+        return cls(
+            matcher=payload["matcher"],
+            threshold=payload["threshold"],
+            generated_at=payload["generated_at"],
+            overall_recall=payload["overall_recall"],
+            overall_precision=payload["overall_precision"],
+            false_positive_rate=payload["false_positive_rate"],
+            by_class=by_class,
+            manifest=Manifest(**payload["manifest"]),
+        )
+
+    @classmethod
+    def from_json(cls, path) -> Scorecard:
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+        return cls.from_dict(payload)
+
 
 def score(bench: Benchmark, matcher: Callable, threshold: float = 0.85, matcher_name=None) -> Scorecard:
     """Run ``matcher`` over every case and produce a scorecard.
@@ -291,4 +313,116 @@ def format_scorecard(sc: Scorecard) -> str:
     a("  The precision figure measures discrimination against structurally")
     a("  adjacent synthetic strings. It is NOT a production alert-volume estimate.")
     a("=" * 72)
+    return "\n".join(lines)
+
+
+# --------------------------------------------------------------------------
+# Comparison
+# --------------------------------------------------------------------------
+
+
+@dataclass
+class ClassComparison:
+    perturbation: str
+    family: str
+    n: int
+    hits_a: int
+    hits_b: int
+
+    @property
+    def recall_a(self) -> float:
+        return self.hits_a / self.n if self.n else 0.0
+
+    @property
+    def recall_b(self) -> float:
+        return self.hits_b / self.n if self.n else 0.0
+
+    @property
+    def delta(self) -> float:
+        return self.recall_b - self.recall_a
+
+
+def is_scorecard_payload(payload: dict) -> bool:
+    return "matcher" in payload and "by_class" in payload and "cases" not in payload
+
+
+def compare(a: Scorecard, b: Scorecard) -> list:
+    """Pairwise class-wise recall comparison between two scorecards."""
+    map_a = {(c.perturbation, c.family): c for c in a.by_class}
+    map_b = {(c.perturbation, c.family): c for c in b.by_class}
+    keys = sorted(set(map_a) | set(map_b), key=lambda k: (k[1], k[0]))
+    rows = []
+    for key in keys:
+        ca = map_a.get(key)
+        cb = map_b.get(key)
+        n = (ca or cb).n
+        rows.append(
+            ClassComparison(
+                perturbation=key[0],
+                family=key[1],
+                n=n,
+                hits_a=ca.hits if ca else 0,
+                hits_b=cb.hits if cb else 0,
+            )
+        )
+    return rows
+
+
+def format_comparison(a: Scorecard, b: Scorecard, rows: list = None) -> str:
+    """Render a side-by-side comparison of two scorecards."""
+    if rows is None:
+        rows = compare(a, b)
+
+    lines = []
+    add = lines.append
+    add("=" * 88)
+    add("  SANCTIONS SCREENING BENCHMARK — COMPARISON")
+    add("=" * 88)
+    add(f"  A                  {a.matcher}  @ threshold {a.threshold}")
+    add(f"  B                  {b.matcher}  @ threshold {b.threshold}")
+    add(f"  List source        {a.manifest.list_source} (retrieved {a.manifest.list_retrieved_at})")
+    add("")
+    add(f"  {'METRIC':<22}{'A':>12}{'B':>12}{'DELTA':>12}")
+    add(f"  {'Overall recall':<22}{a.overall_recall:>11.1%}{b.overall_recall:>11.1%}{b.overall_recall - a.overall_recall:>+11.1%}")
+    add(
+        f"  {'Overall precision':<22}{a.overall_precision:>11.1%}"
+        f"{b.overall_precision:>11.1%}{b.overall_precision - a.overall_precision:>+11.1%}"
+    )
+    add(
+        f"  {'False positive rt':<22}{a.false_positive_rate:>11.1%}"
+        f"{b.false_positive_rate:>11.1%}{b.false_positive_rate - a.false_positive_rate:>+11.1%}"
+    )
+    add("")
+    add("-" * 88)
+    add(
+        f"  {'PERTURBATION':<20}{'FAMILY':<12}{'N':>5}"
+        f"{'RECALL A':>10}{'RECALL B':>10}{'DELTA':>10}  NOTE"
+    )
+    add("-" * 88)
+
+    current_family = None
+    for row in rows:
+        if row.family != current_family:
+            if current_family is not None:
+                add("")
+            current_family = row.family
+
+        note = ""
+        if row.delta >= 0.10:
+            note = "improved"
+        elif row.delta <= -0.10:
+            note = "regression"
+        elif row.recall_a < 0.5 and row.recall_b < 0.5:
+            note = "shared blind spot"
+
+        add(
+            f"  {row.perturbation:<20}{row.family:<12}{row.n:>5}"
+            f"{row.recall_a:>9.1%}{row.recall_b:>9.1%}{row.delta:>+9.1%}  {note}"
+        )
+
+    add("-" * 88)
+    add("")
+    add("  Positive DELTA means B recovered more cases in that class than A.")
+    add("  For false-positive rate, a negative DELTA means B fired less often on negatives.")
+    add("=" * 88)
     return "\n".join(lines)

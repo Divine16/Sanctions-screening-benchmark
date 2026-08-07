@@ -67,6 +67,50 @@ def cmd_evaluate(args) -> int:
     return 0
 
 
+def cmd_compare(args) -> int:
+    """Compare two matchers on a benchmark, or two saved scorecard files."""
+    matchers = {"baseline": matching.BaselineMatcher(), "exact": matching.ExactMatcher()}
+
+    if args.scorecard_a and args.scorecard_b:
+        sc_a = bm.Scorecard.from_json(args.scorecard_a)
+        sc_b = bm.Scorecard.from_json(args.scorecard_b)
+    elif args.benchmark:
+        bench = bm.Benchmark.from_json(args.benchmark)
+        sc_a = bm.score(bench, matchers[args.a], threshold=args.threshold, matcher_name=args.a)
+        sc_b = bm.score(bench, matchers[args.b], threshold=args.threshold, matcher_name=args.b)
+    else:
+        print("provide a benchmark path or both --scorecard-a and --scorecard-b", file=sys.stderr)
+        return 2
+
+    report = bm.format_comparison(sc_a, sc_b)
+    if args.json:
+        rows = bm.compare(sc_a, sc_b)
+        print(
+            json.dumps(
+                {
+                    "a": sc_a.to_dict(),
+                    "b": sc_b.to_dict(),
+                    "comparison": [
+                        {
+                            "perturbation": r.perturbation,
+                            "family": r.family,
+                            "n": r.n,
+                            "recall_a": round(r.recall_a, 4),
+                            "recall_b": round(r.recall_b, 4),
+                            "delta": round(r.delta, 4),
+                        }
+                        for r in rows
+                    ],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+    else:
+        print(report)
+    return 0
+
+
 def cmd_demo(args) -> int:
     """Generate from the fixture and evaluate. No network needed."""
     snapshot = sources.load_fixture()
@@ -107,6 +151,19 @@ def main(argv=None) -> int:
     p.add_argument("--json", action="store_true")
     p.add_argument("--save", default=None)
     p.set_defaults(func=cmd_evaluate)
+
+    p = sub.add_parser(
+        "compare",
+        help="compare two matchers on a benchmark, or two saved scorecard files",
+    )
+    p.add_argument("benchmark", nargs="?", help="benchmark JSON (compare --a vs --b matchers)")
+    p.add_argument("--a", default="exact", choices=["baseline", "exact"], help="matcher A (default: exact)")
+    p.add_argument("--b", default="baseline", choices=["baseline", "exact"], help="matcher B (default: baseline)")
+    p.add_argument("--scorecard-a", default=None, help="first saved scorecard JSON")
+    p.add_argument("--scorecard-b", default=None, help="second saved scorecard JSON")
+    p.add_argument("--threshold", type=float, default=0.85)
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_compare)
 
     p = sub.add_parser("demo", help="generate and evaluate against the offline fixture")
     p.add_argument("--seed", type=int, default=0)

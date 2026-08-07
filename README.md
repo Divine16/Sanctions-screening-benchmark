@@ -81,6 +81,14 @@ PYTHONPATH=src python3 -m ssb.cli generate --limit 500 --out benchmark.json
 
 # Score the reference matcher against it
 PYTHONPATH=src python3 -m ssb.cli evaluate benchmark.json --threshold 0.85
+
+# Compare two matchers side-by-side on the same benchmark
+PYTHONPATH=src python3 -m ssb.cli compare benchmark.json --a exact --b baseline
+
+# Or compare two saved scorecards
+PYTHONPATH=src python3 -m ssb.cli evaluate benchmark.json --save scorecard-a.json --matcher exact
+PYTHONPATH=src python3 -m ssb.cli evaluate benchmark.json --save scorecard-b.json --matcher baseline
+PYTHONPATH=src python3 -m ssb.cli compare --scorecard-a scorecard-a.json --scorecard-b scorecard-b.json
 ```
 
 Run the tests:
