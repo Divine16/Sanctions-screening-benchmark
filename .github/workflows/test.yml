@@ -15,4 +15,9 @@ jobs:
         run: python -m unittest discover -s tests -t . -v
       - name: Run offline demo
         run: PYTHONPATH=src python -m ssb.cli demo
+      - name: Run offline compare and sweep
+        run: |
+          PYTHONPATH=src python -m ssb.cli generate --offline --limit 10 --max-per-class 1 --out /tmp/ssb-bench.json
+          PYTHONPATH=src python -m ssb.cli compare /tmp/ssb-bench.json --a exact --b baseline
+          PYTHONPATH=src python -m ssb.cli sweep /tmp/ssb-bench.json --from-threshold 0.7 --to-threshold 0.95 --step 0.05
 

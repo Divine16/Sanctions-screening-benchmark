@@ -197,6 +197,91 @@ class Scorecard:
             "manifest": asdict(self.manifest),
         }
 
+    @classmethod
+    def from_dict(cls, payload: dict) -> Scorecard:
+        by_class = [
+            ClassResult(c["perturbation"], c["family"], c["n"], c["hits"])
+            for c in payload["by_class"]
+        ]
+        return cls(
+            matcher=payload["matcher"],
+            threshold=payload["threshold"],
+            generated_at=payload["generated_at"],
+            overall_recall=payload["overall_recall"],
+            overall_precision=payload["overall_precision"],
+            false_positive_rate=payload["false_positive_rate"],
+            by_class=by_class,
+            manifest=Manifest(**payload["manifest"]),
+        )
+
+    @classmethod
+    def from_json(cls, path) -> Scorecard:
+        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+        return cls.from_dict(payload)
+
+
+@dataclass
+class CaseOutcome:
+    """Pre-threshold match result for a single benchmark case."""
+
+    expected_entity_id: str
+    perturbation: str
+    family: str
+    best_id: str
+    best_score: float
+
+
+def evaluate_cases(bench: Benchmark, matcher: Callable) -> list:
+    """Run ``matcher`` once per case and return the best candidate match."""
+    outcomes = []
+    for case in bench.cases:
+        best_id, best_score = None, 0.0
+        for entity_id, names in bench.candidates.items():
+            for cand in names:
+                s = matcher(case.query, cand)
+                if s > best_score:
+                    best_id, best_score = entity_id, s
+        outcomes.append(
+            CaseOutcome(
+                expected_entity_id=case.expected_entity_id,
+                perturbation=case.perturbation,
+                family=case.family,
+                best_id=best_id,
+                best_score=best_score,
+            )
+        )
+    return outcomes
+
+
+def _metrics_at_threshold(outcomes: list, threshold: float) -> tuple:
+    buckets = {}
+    tp = fn = fp = tn = 0
+
+    for outcome in outcomes:
+        fired = outcome.best_score >= threshold
+        if outcome.expected_entity_id is not None:
+            key = (outcome.perturbation, outcome.family)
+            bucket = buckets.setdefault(
+                key,
+                ClassResult(outcome.perturbation, outcome.family, 0, 0),
+            )
+            bucket.n += 1
+            if fired and outcome.best_id == outcome.expected_entity_id:
+                bucket.hits += 1
+                tp += 1
+            else:
+                fn += 1
+        elif fired:
+            fp += 1
+        else:
+            tn += 1
+
+    recall = tp / (tp + fn) if (tp + fn) else 0.0
+    precision = tp / (tp + fp) if (tp + fp) else 0.0
+    fpr = fp / (fp + tn) if (fp + tn) else 0.0
+    by_class = sorted(buckets.values(), key=lambda c: (c.family, c.recall))
+    return recall, precision, fpr, by_class
+
 
 def score(bench: Benchmark, matcher: Callable, threshold: float = 0.85, matcher_name=None) -> Scorecard:
     """Run ``matcher`` over every case and produce a scorecard.
@@ -207,40 +292,8 @@ def score(bench: Benchmark, matcher: Callable, threshold: float = 0.85, matcher_
     any candidate scores at or above ``threshold``.
     """
     name = matcher_name or getattr(matcher, "name", type(matcher).__name__)
-
-    buckets = {}
-    tp = fn = fp = tn = 0
-
-    for case in bench.cases:
-        best_id, best_score = None, 0.0
-        for entity_id, names in bench.candidates.items():
-            for cand in names:
-                s = matcher(case.query, cand)
-                if s > best_score:
-                    best_id, best_score = entity_id, s
-
-        fired = best_score >= threshold
-
-        if case.expected_entity_id is not None:
-            key = (case.perturbation, case.family)
-            b = buckets.setdefault(key, ClassResult(case.perturbation, case.family, 0, 0))
-            b.n += 1
-            if fired and best_id == case.expected_entity_id:
-                b.hits += 1
-                tp += 1
-            else:
-                fn += 1
-        else:
-            if fired:
-                fp += 1
-            else:
-                tn += 1
-
-    recall = tp / (tp + fn) if (tp + fn) else 0.0
-    precision = tp / (tp + fp) if (tp + fp) else 0.0
-    fpr = fp / (fp + tn) if (fp + tn) else 0.0
-
-    by_class = sorted(buckets.values(), key=lambda c: (c.family, c.recall))
+    outcomes = evaluate_cases(bench, matcher)
+    recall, precision, fpr, by_class = _metrics_at_threshold(outcomes, threshold)
     return Scorecard(
         matcher=name,
         threshold=threshold,
@@ -291,4 +344,254 @@ def format_scorecard(sc: Scorecard) -> str:
     a("  The precision figure measures discrimination against structurally")
     a("  adjacent synthetic strings. It is NOT a production alert-volume estimate.")
     a("=" * 72)
+    return "\n".join(lines)
+
+
+# --------------------------------------------------------------------------
+# Threshold sweep
+# --------------------------------------------------------------------------
+
+
+def default_thresholds(start: float = 0.50, stop: float = 0.95, step: float = 0.05) -> list:
+    """Build an inclusive threshold grid, rounded to avoid float drift."""
+    thresholds = []
+    t = start
+    while t <= stop + (step / 2):
+        thresholds.append(round(t, 4))
+        t += step
+    return thresholds
+
+
+def parse_thresholds(
+    values: str = None,
+    start: float = 0.50,
+    stop: float = 0.95,
+    step: float = 0.05,
+) -> list:
+    if values:
+        thresholds = [float(v.strip()) for v in values.split(",") if v.strip()]
+        if not thresholds:
+            raise ValueError("threshold list is empty")
+        return sorted(set(thresholds))
+    return default_thresholds(start, stop, step)
+
+
+@dataclass
+class ThresholdPoint:
+    threshold: float
+    recall: float
+    precision: float
+    false_positive_rate: float
+
+    @property
+    def f1(self) -> float:
+        denom = self.precision + self.recall
+        return (2 * self.precision * self.recall / denom) if denom else 0.0
+
+
+@dataclass
+class SweepResult:
+    matcher: str
+    generated_at: str
+    manifest: Manifest
+    points: list
+
+    @property
+    def best_f1(self) -> ThresholdPoint:
+        return max(self.points, key=lambda p: p.f1)
+
+    def to_dict(self) -> dict:
+        return {
+            "matcher": self.matcher,
+            "generated_at": self.generated_at,
+            "best_f1_threshold": self.best_f1.threshold,
+            "points": [
+                {
+                    "threshold": p.threshold,
+                    "recall": round(p.recall, 4),
+                    "precision": round(p.precision, 4),
+                    "false_positive_rate": round(p.false_positive_rate, 4),
+                    "f1": round(p.f1, 4),
+                }
+                for p in self.points
+            ],
+            "manifest": asdict(self.manifest),
+        }
+
+
+def sweep(
+    bench: Benchmark,
+    matcher: Callable,
+    thresholds: list = None,
+    matcher_name=None,
+) -> SweepResult:
+    """Score a matcher across multiple thresholds using one matcher pass."""
+    name = matcher_name or getattr(matcher, "name", type(matcher).__name__)
+    grid = thresholds if thresholds is not None else default_thresholds()
+    outcomes = evaluate_cases(bench, matcher)
+    points = []
+    for threshold in grid:
+        recall, precision, fpr, _ = _metrics_at_threshold(outcomes, threshold)
+        points.append(
+            ThresholdPoint(
+                threshold=threshold,
+                recall=recall,
+                precision=precision,
+                false_positive_rate=fpr,
+            )
+        )
+    return SweepResult(
+        matcher=name,
+        generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        manifest=bench.manifest,
+        points=points,
+    )
+
+
+def format_sweep(result: SweepResult) -> str:
+    """Render a threshold sweep as a plain-text report."""
+    lines = []
+    add = lines.append
+    best = result.best_f1
+    add("=" * 72)
+    add("  SANCTIONS SCREENING BENCHMARK — THRESHOLD SWEEP")
+    add("=" * 72)
+    add(f"  Matcher            {result.matcher}")
+    add(f"  List source        {result.manifest.list_source} (retrieved {result.manifest.list_retrieved_at})")
+    add(f"  Entities / cases   {result.manifest.entity_count} / {result.manifest.case_count}")
+    add(f"  Thresholds         {len(result.points)} from {result.points[0].threshold:.2f} to {result.points[-1].threshold:.2f}")
+    add("")
+    add("-" * 72)
+    add(f"  {'THRESHOLD':>10}{'RECALL':>10}{'PRECISION':>12}{'FPR':>10}{'F1':>10}")
+    add("-" * 72)
+    for point in result.points:
+        marker = "  <-- best F1" if point is best else ""
+        add(
+            f"  {point.threshold:>10.2f}{point.recall:>9.1%}{point.precision:>11.1%}"
+            f"{point.false_positive_rate:>9.1%}{point.f1:>9.1%}{marker}"
+        )
+    add("-" * 72)
+    add("")
+    add(
+        f"  Best F1 at threshold {best.threshold:.2f}: "
+        f"recall {best.recall:.1%}, precision {best.precision:.1%}, "
+        f"FPR {best.false_positive_rate:.1%}, F1 {best.f1:.1%}"
+    )
+    add("")
+    add("  Use this table to pick an operating point. Higher thresholds reduce")
+    add("  synthetic false positives but may miss benign and adversarial variants.")
+    add("  The F1 optimum is a diagnostic hint, not a production tuning target.")
+    add("=" * 72)
+    return "\n".join(lines)
+
+
+# --------------------------------------------------------------------------
+# Comparison
+# --------------------------------------------------------------------------
+
+
+@dataclass
+class ClassComparison:
+    perturbation: str
+    family: str
+    n: int
+    hits_a: int
+    hits_b: int
+
+    @property
+    def recall_a(self) -> float:
+        return self.hits_a / self.n if self.n else 0.0
+
+    @property
+    def recall_b(self) -> float:
+        return self.hits_b / self.n if self.n else 0.0
+
+    @property
+    def delta(self) -> float:
+        return self.recall_b - self.recall_a
+
+
+def is_scorecard_payload(payload: dict) -> bool:
+    return "matcher" in payload and "by_class" in payload and "cases" not in payload
+
+
+def compare(a: Scorecard, b: Scorecard) -> list:
+    """Pairwise class-wise recall comparison between two scorecards."""
+    map_a = {(c.perturbation, c.family): c for c in a.by_class}
+    map_b = {(c.perturbation, c.family): c for c in b.by_class}
+    keys = sorted(set(map_a) | set(map_b), key=lambda k: (k[1], k[0]))
+    rows = []
+    for key in keys:
+        ca = map_a.get(key)
+        cb = map_b.get(key)
+        n = (ca or cb).n
+        rows.append(
+            ClassComparison(
+                perturbation=key[0],
+                family=key[1],
+                n=n,
+                hits_a=ca.hits if ca else 0,
+                hits_b=cb.hits if cb else 0,
+            )
+        )
+    return rows
+
+
+def format_comparison(a: Scorecard, b: Scorecard, rows: list = None) -> str:
+    """Render a side-by-side comparison of two scorecards."""
+    if rows is None:
+        rows = compare(a, b)
+
+    lines = []
+    add = lines.append
+    add("=" * 88)
+    add("  SANCTIONS SCREENING BENCHMARK — COMPARISON")
+    add("=" * 88)
+    add(f"  A                  {a.matcher}  @ threshold {a.threshold}")
+    add(f"  B                  {b.matcher}  @ threshold {b.threshold}")
+    add(f"  List source        {a.manifest.list_source} (retrieved {a.manifest.list_retrieved_at})")
+    add("")
+    add(f"  {'METRIC':<22}{'A':>12}{'B':>12}{'DELTA':>12}")
+    add(f"  {'Overall recall':<22}{a.overall_recall:>11.1%}{b.overall_recall:>11.1%}{b.overall_recall - a.overall_recall:>+11.1%}")
+    add(
+        f"  {'Overall precision':<22}{a.overall_precision:>11.1%}"
+        f"{b.overall_precision:>11.1%}{b.overall_precision - a.overall_precision:>+11.1%}"
+    )
+    add(
+        f"  {'False positive rt':<22}{a.false_positive_rate:>11.1%}"
+        f"{b.false_positive_rate:>11.1%}{b.false_positive_rate - a.false_positive_rate:>+11.1%}"
+    )
+    add("")
+    add("-" * 88)
+    add(
+        f"  {'PERTURBATION':<20}{'FAMILY':<12}{'N':>5}"
+        f"{'RECALL A':>10}{'RECALL B':>10}{'DELTA':>10}  NOTE"
+    )
+    add("-" * 88)
+
+    current_family = None
+    for row in rows:
+        if row.family != current_family:
+            if current_family is not None:
+                add("")
+            current_family = row.family
+
+        note = ""
+        if row.delta >= 0.10:
+            note = "improved"
+        elif row.delta <= -0.10:
+            note = "regression"
+        elif row.recall_a < 0.5 and row.recall_b < 0.5:
+            note = "shared blind spot"
+
+        add(
+            f"  {row.perturbation:<20}{row.family:<12}{row.n:>5}"
+            f"{row.recall_a:>9.1%}{row.recall_b:>9.1%}{row.delta:>+9.1%}  {note}"
+        )
+
+    add("-" * 88)
+    add("")
+    add("  Positive DELTA means B recovered more cases in that class than A.")
+    add("  For false-positive rate, a negative DELTA means B fired less often on negatives.")
+    add("=" * 88)
     return "\n".join(lines)
