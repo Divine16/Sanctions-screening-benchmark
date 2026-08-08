@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Sanctions Screening Benchmark</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0e1a;--card:#111827;--card2:#1a2236;--border:#1e2d45;
+  --accent:#3b82f6;--accent2:#6366f1;--green:#10b981;--red:#ef4444;
+  --orange:#f59e0b;--text:#e2e8f0;--muted:#64748b;--white:#fff;
+}
+body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh}
+a{color:var(--accent);text-decoration:none}
+
+/* NAV */
+nav{display:flex;align-items:center;gap:12px;padding:16px 32px;border-bottom:1px solid var(--border);background:rgba(10,14,26,.9);backdrop-filter:blur(10px);position:sticky;top:0;z-index:100}
+.nav-logo{font-size:1.1rem;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.nav-sub{color:var(--muted);font-size:.8rem;margin-left:4px}
+nav .spacer{flex:1}
+.nav-tabs{display:flex;gap:4px}
+.tab-btn{background:none;border:none;color:var(--muted);cursor:pointer;padding:8px 16px;border-radius:8px;font-size:.85rem;font-family:inherit;transition:.2s}
+.tab-btn.active,.tab-btn:hover{color:var(--text);background:var(--card2)}
+.tab-btn.active{color:var(--accent)}
+
+/* LAYOUT */
+.container{max-width:1200px;margin:0 auto;padding:32px 24px}
+.page{display:none}.page.active{display:block}
+
+/* CARDS */
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px}
+.card-title{font-size:1rem;font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+
+/* HERO */
+.hero{text-align:center;padding:48px 24px;background:linear-gradient(135deg,rgba(59,130,246,.08),rgba(99,102,241,.08));border:1px solid var(--border);border-radius:20px;margin-bottom:32px}
+.hero h1{font-size:2.2rem;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2),#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:12px}
+.hero p{color:var(--muted);max-width:600px;margin:0 auto 24px;line-height:1.6}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:12px 24px;border-radius:10px;border:none;cursor:pointer;font-family:inherit;font-size:.9rem;font-weight:500;transition:.2s}
+.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff}
+.btn-primary:hover{opacity:.85;transform:translateY(-1px)}
+.btn-secondary{background:var(--card2);color:var(--text);border:1px solid var(--border)}
+.btn-secondary:hover{border-color:var(--accent)}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+
+/* STAT CARDS */
+.stat{background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:20px;text-align:center}
+.stat-val{font-size:2rem;font-weight:700;margin-bottom:4px}
+.stat-lbl{font-size:.8rem;color:var(--muted)}
+.c-blue{color:var(--accent)}.c-green{color:var(--green)}.c-red{color:var(--red)}.c-orange{color:var(--orange)}
+
+/* PROGRESS */
+.progress-wrap{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:32px;text-align:center;display:none}
+.progress-wrap.show{display:block}
+.progress-bar-bg{background:var(--card2);border-radius:100px;height:8px;margin:16px 0;overflow:hidden}
+.progress-bar{height:100%;border-radius:100px;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .4s;width:0%}
+.progress-msg{color:var(--muted);font-size:.9rem}
+
+/* TABLE */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.88rem}
+th{text-align:left;padding:10px 14px;color:var(--muted);font-weight:500;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:10px 14px;border-bottom:1px solid rgba(30,45,69,.5)}
+tr:hover td{background:rgba(255,255,255,.02)}
+.badge{display:inline-block;padding:3px 10px;border-radius:100px;font-size:.75rem;font-weight:600}
+.badge-adversarial{background:rgba(239,68,68,.15);color:#f87171}
+.badge-benign{background:rgba(16,185,129,.15);color:#34d399}
+.badge-degraded{background:rgba(245,158,11,.15);color:#fbbf24}
+.badge-negative{background:rgba(100,116,139,.15);color:#94a3b8}
+.blind{color:var(--red);font-size:.8rem;font-weight:500}
+
+/* RECALL BAR */
+.recall-bar{display:flex;align-items:center;gap:8px}
+.recall-bg{flex:1;background:var(--card2);border-radius:4px;height:6px;overflow:hidden;max-width:120px}
+.recall-fill{height:100%;border-radius:4px;transition:width .5s}
+
+/* FORM */
+.form-group{margin-bottom:16px}
+label{display:block;font-size:.85rem;color:var(--muted);margin-bottom:6px}
+input,select,textarea{width:100%;background:var(--card2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:10px 14px;font-family:inherit;font-size:.9rem;outline:none;transition:.2s}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+.range-row{display:flex;align-items:center;gap:12px}
+.range-row input[type=range]{flex:1;accent-color:var(--accent)}
+.range-val{font-weight:600;color:var(--accent);min-width:40px}
+
+/* RESULT BOX */
+.result-box{background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:16px;margin-top:16px}
+.score-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)}
+.score-row:last-child{border:none}
+.score-label{font-size:.88rem;color:var(--muted)}
+.score-value{font-size:1.1rem;font-weight:700}
+
+/* CLASSES PAGE */
+.class-card{background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:10px}
+.class-name{font-weight:600;font-size:.95rem;margin-bottom:4px}
+.class-desc{color:var(--muted);font-size:.83rem;line-height:1.5}
+.family-heading{font-size:.75rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;margin:20px 0 10px;padding:6px 12px;border-radius:6px;display:inline-block}
+.fh-benign{background:rgba(16,185,129,.1);color:#34d399}
+.fh-adversarial{background:rgba(239,68,68,.1);color:#f87171}
+.fh-degraded{background:rgba(245,158,11,.1);color:#fbbf24}
+
+/* PERTURB TAG */
+.variant-tag{display:inline-block;background:var(--card);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:.82rem;margin:3px;font-family:monospace}
+.section-title{font-size:1.1rem;font-weight:600;margin:24px 0 12px}
+
+/* BATCH SCREENER */
+.hit-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:100px;font-size:.78rem;font-weight:700}
+.hit-badge.hit{background:rgba(239,68,68,.15);color:#f87171}
+.hit-badge.clear{background:rgba(16,185,129,.15);color:#34d399}
+.score-mini{display:flex;align-items:center;gap:6px;font-size:.88rem}
+.score-mini-bar{width:60px;height:5px;background:var(--card2);border-radius:3px;overflow:hidden}
+.score-mini-fill{height:100%;border-radius:3px}
+/* TOAST */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:12px 20px;font-size:.88rem;z-index:999;animation:slideIn .3s ease;display:none}
+.toast.show{display:block}
+@keyframes slideIn{from{transform:translateY(20px);opacity:0}to{transform:translateY(0);opacity:1}}
+
+@media(max-width:768px){.grid2,.grid3{grid-template-columns:1fr}.hero h1{font-size:1.5rem}.container{padding:16px}}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-logo">⚖ SSB</div>
+  <span class="nav-sub">Sanctions Screening Benchmark</span>
+  <div class="spacer"></div>
+  <div class="nav-tabs">
+    <button class="tab-btn active" onclick="showPage('dashboard',this)">Dashboard</button>
+    <button class="tab-btn" onclick="showPage('classes',this)">Classes</button>
+    <button class="tab-btn" onclick="showPage('perturb',this)">Perturb</button>
+    <button class="tab-btn" onclick="showPage('matcher',this)">Matcher</button>
+    <button class="tab-btn" onclick="showPage('batch',this)">🔎 Batch Screener</button>
+  </div>
+</nav>
+
+<div class="container">
+
+<!-- DASHBOARD PAGE -->
+<div id="page-dashboard" class="page active">
+  <div class="hero">
+    <h1>Sanctions Screening Benchmark</h1>
+    <p>Measure which classes of name variation your screening engine is blind to. Run the demo (offline) or evaluate the full benchmark dataset.</p>
+    <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+      <button class="btn btn-primary" id="btn-demo" onclick="runDemo()">▶ Run Demo (Offline)</button>
+      <button class="btn btn-secondary" id="btn-eval" onclick="runEval()">📊 Evaluate benchmark.json</button>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-title">⚙ Settings</div>
+    <div class="grid2">
+      <div class="form-group">
+        <label>Threshold</label>
+        <div class="range-row">
+          <input type="range" id="threshold" min="0.5" max="1.0" step="0.01" value="0.85" oninput="document.getElementById('thresholdVal').textContent=this.value">
+          <span class="range-val" id="thresholdVal">0.85</span>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Matcher (for benchmark.json eval)</label>
+        <select id="matcher-select">
+          <option value="baseline">Baseline Jaro-Winkler Token-Set</option>
+          <option value="exact">Exact (Normalised)</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Progress -->
+  <div class="progress-wrap" id="progress-wrap">
+    <div style="font-weight:600;margin-bottom:8px" id="progress-title">Running…</div>
+    <div class="progress-bar-bg"><div class="progress-bar" id="progress-bar"></div></div>
+    <div class="progress-msg" id="progress-msg">Please wait…</div>
+  </div>
+
+  <!-- Stats -->
+  <div id="stats-section" style="display:none">
+    <div id="scorecards-container"></div>
+  </div>
+</div>
+
+<!-- CLASSES PAGE -->
+<div id="page-classes" class="page">
+  <div class="section-title">Perturbation Classes</div>
+  <p style="color:var(--muted);margin-bottom:24px;font-size:.9rem">18 classes across 3 families. Each models a documented real-world reason why a name string deviates from its canonical sanctions-list form.</p>
+  <div id="classes-container">Loading…</div>
+</div>
+
+<!-- PERTURB PAGE -->
+<div id="page-perturb" class="page">
+  <div class="section-title">Name Perturbation Explorer</div>
+  <p style="color:var(--muted);margin-bottom:20px;font-size:.9rem">Enter any name to see all perturbation variants the benchmark engine generates across every class.</p>
+  <div class="card" style="margin-bottom:20px">
+    <div class="form-group">
+      <label>Name</label>
+      <div style="display:flex;gap:10px">
+        <input type="text" id="perturb-name" placeholder="e.g. Muhammad Al-Zawahiri" style="flex:1" onkeydown="if(event.key==='Enter')runPerturb()"/>
+        <button class="btn btn-primary" onclick="runPerturb()">Generate</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-secondary" style="font-size:.8rem;padding:6px 12px" onclick="setName('Muhammad Al-Zawahiri')">Muhammad Al-Zawahiri</button>
+      <button class="btn btn-secondary" style="font-size:.8rem;padding:6px 12px" onclick="setName('Kim Jong Un')">Kim Jong Un</button>
+      <button class="btn btn-secondary" style="font-size:.8rem;padding:6px 12px" onclick="setName('Aleksei Navalny')">Aleksei Navalny</button>
+    </div>
+  </div>
+  <div id="perturb-results"></div>
+</div>
+
+<!-- MATCHER PAGE -->
+<div id="page-matcher" class="page">
+  <div class="section-title">Live Name Matcher</div>
+  <p style="color:var(--muted);margin-bottom:20px;font-size:.9rem">Score any query string against a candidate string using both matchers.</p>
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title">🔍 Input</div>
+      <div class="form-group"><label>Query (the name to screen)</label><input type="text" id="m-query" placeholder="e.g. Mohammed Hussain"/></div>
+      <div class="form-group"><label>Candidate (from sanctions list)</label><input type="text" id="m-cand" placeholder="e.g. Muhammad Hussein"/></div>
+      <button class="btn btn-primary" style="width:100%" onclick="runMatch()">Score</button>
+    </div>
+    <div class="card">
+      <div class="card-title">📈 Results</div>
+      <div id="match-results">
+        <p style="color:var(--muted);text-align:center;padding:32px 0">Enter names and click Score</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- BATCH SCREENER PAGE -->
+<div id="page-batch" class="page">
+  <div class="section-title">🔎 Batch Screener <span style="font-size:.75rem;font-weight:400;color:var(--muted);margin-left:8px">NEW</span></div>
+  <p style="color:var(--muted);margin-bottom:20px;font-size:.9rem">Paste up to 100 names (one per line) and screen them all against the offline fixture candidate pool. See which names fire, at what score, and which sanctioned entity they match.</p>
+  <div class="grid2" style="margin-bottom:20px">
+    <div class="card">
+      <div class="card-title">📋 Names to Screen</div>
+      <div class="form-group">
+        <label>One name per line (max 100)</label>
+        <textarea id="batch-names" rows="10" placeholder="Muhammad Al-Zawahiri
+Kim Jong Un
+Ahmed Al-Ghamdi
+Alexandr Ivanov
+John Smith"></textarea>
+      </div>
+      <div class="grid2" style="margin-bottom:16px">
+        <div class="form-group">
+          <label>Threshold</label>
+          <div class="range-row">
+            <input type="range" id="batch-threshold" min="0.5" max="1.0" step="0.01" value="0.85" oninput="document.getElementById('batchThresholdVal').textContent=this.value">
+            <span class="range-val" id="batchThresholdVal">0.85</span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Matcher</label>
+          <select id="batch-matcher">
+            <option value="baseline">Baseline Jaro-Winkler</option>
+            <option value="exact">Exact (Normalised)</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn btn-primary" id="batch-run-btn" onclick="runBatch()">▶ Screen All Names</button>
+        <button class="btn btn-secondary" onclick="loadBatchSamples()">Load Sample Names</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">📊 Summary</div>
+      <div id="batch-summary">
+        <p style="color:var(--muted);text-align:center;padding:48px 0">Results will appear here after screening</p>
+      </div>
+    </div>
+  </div>
+  <div id="batch-results-wrap" style="display:none">
+    <div class="card">
+      <div class="card-title">🗃 Screening Results</div>
+      <div class="table-wrap">
+        <table id="batch-table">
+          <thead><tr>
+            <th>#</th><th>Query Name</th><th>Result</th><th>Score</th><th>Matched Entity</th>
+          </tr></thead>
+          <tbody id="batch-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /container -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+const FAMILY_COLORS = {adversarial:'adversarial',benign:'benign',degraded:'degraded',negative:'negative'};
+
+function showPage(name, btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  if(btn) btn.classList.add('active');
+  if(name==='classes') loadClasses();
+}
+
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),3000);
+}
+
+function recallColor(r){
+  if(r>=0.8) return 'var(--green)';
+  if(r>=0.5) return 'var(--orange)';
+  return 'var(--red)';
+}
+
+// ---- DEMO / EVAL ----
+function runDemo(){
+  const threshold=parseFloat(document.getElementById('threshold').value);
+  startJob('/api/demo',{threshold},'Running Demo (Offline Fixture)…','btn-demo','btn-eval');
+}
+function runEval(){
+  const threshold=parseFloat(document.getElementById('threshold').value);
+  const matcher=document.getElementById('matcher-select').value;
+  startJob('/api/evaluate',{threshold,matcher},'Evaluating benchmark.json (this may take a few minutes)…','btn-eval','btn-demo');
+}
+
+function startJob(url,body,title,disableBtn,otherBtn){
+  document.getElementById('btn-demo').disabled=true;
+  document.getElementById('btn-eval').disabled=true;
+  document.getElementById('stats-section').style.display='none';
+  const pw=document.getElementById('progress-wrap');
+  pw.classList.add('show');
+  document.getElementById('progress-title').textContent=title;
+  document.getElementById('progress-bar').style.width='0%';
+  document.getElementById('progress-msg').textContent='Starting…';
+
+  fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+    .then(r=>r.json()).then(d=>{
+      if(d.error){toast('Error: '+d.error);pw.classList.remove('show');return;}
+      pollJob(d.job_id);
+    });
+}
+
+function pollJob(id){
+  fetch('/api/jobs/'+id).then(r=>r.json()).then(job=>{
+    document.getElementById('progress-bar').style.width=job.progress+'%';
+    document.getElementById('progress-msg').textContent=job.message;
+    if(job.status==='running'){setTimeout(()=>pollJob(id),800);return;}
+    document.getElementById('btn-demo').disabled=false;
+    document.getElementById('btn-eval').disabled=false;
+    if(job.status==='error'){
+      document.getElementById('progress-wrap').classList.remove('show');
+      toast('Error: '+job.error);return;
+    }
+    document.getElementById('progress-wrap').classList.remove('show');
+    renderScorecards(job.result);
+  });
+}
+
+function renderScorecards(scs){
+  const sec=document.getElementById('stats-section');
+  const cont=document.getElementById('scorecards-container');
+  cont.innerHTML='';
+  scs.forEach(sc=>{
+    cont.innerHTML+=`
+    <div style="margin-bottom:32px">
+      <div class="grid3" style="margin-bottom:16px">
+        <div class="stat"><div class="stat-val c-blue">${(sc.overall_recall*100).toFixed(1)}%</div><div class="stat-lbl">Overall Recall</div></div>
+        <div class="stat"><div class="stat-val c-green">${(sc.overall_precision*100).toFixed(1)}%</div><div class="stat-lbl">Overall Precision</div></div>
+        <div class="stat"><div class="stat-val c-red">${(sc.false_positive_rate*100).toFixed(1)}%</div><div class="stat-lbl">False Positive Rate</div></div>
+      </div>
+      <div class="card">
+        <div class="card-title">📋 ${sc.matcher} — Threshold ${sc.threshold}</div>
+        <div style="font-size:.8rem;color:var(--muted);margin-bottom:16px">
+          ${sc.manifest.entity_count} entities · ${sc.manifest.case_count} cases · ${sc.manifest.positive_count} positives · ${sc.manifest.negative_count} negatives
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Perturbation</th><th>Family</th><th>N</th><th>Hits</th><th>Recall</th><th></th></tr></thead>
+            <tbody>
+              ${sc.by_class.map(c=>`
+                <tr>
+                  <td style="font-weight:500">${c.perturbation}</td>
+                  <td><span class="badge badge-${c.family}">${c.family}</span></td>
+                  <td>${c.n}</td>
+                  <td>${c.hits}</td>
+                  <td>
+                    <div class="recall-bar">
+                      <div class="recall-bg"><div class="recall-fill" style="width:${c.recall*100}%;background:${recallColor(c.recall)}"></div></div>
+                      <span style="color:${recallColor(c.recall)};font-weight:600;font-size:.88rem">${(c.recall*100).toFixed(1)}%</span>
+                    </div>
+                  </td>
+                  <td>${c.recall<0.5?'<span class="blind">⚠ blind spot</span>':''}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+  });
+  sec.style.display='block';
+}
+
+// ---- CLASSES ----
+let classesLoaded=false;
+function loadClasses(){
+  if(classesLoaded) return;
+  fetch('/api/classes').then(r=>r.json()).then(data=>{
+    const cont=document.getElementById('classes-container');
+    cont.innerHTML='';
+    const labels={benign:'Benign — Innocent Variation',adversarial:'Adversarial — Deliberate Evasion',degraded:'Degraded — Upstream System Loss'};
+    ['benign','adversarial','degraded'].forEach(fam=>{
+      cont.innerHTML+=`<div class="family-heading fh-${fam}">${labels[fam]}</div>`;
+      data[fam].forEach(c=>{
+        cont.innerHTML+=`<div class="class-card"><div class="class-name">${c.name}</div><div class="class-desc">${c.description}</div></div>`;
+      });
+    });
+    classesLoaded=true;
+  });
+}
+
+// ---- PERTURB ----
+function setName(n){document.getElementById('perturb-name').value=n;runPerturb();}
+function runPerturb(){
+  const name=document.getElementById('perturb-name').value.trim();
+  if(!name){toast('Enter a name first');return;}
+  fetch('/api/perturb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})})
+    .then(r=>r.json()).then(data=>{
+      if(data.error){toast(data.error);return;}
+      const cont=document.getElementById('perturb-results');
+      const fams={benign:[],adversarial:[],degraded:[]};
+      Object.entries(data.variants).forEach(([cls,variants])=>{
+        const fam=variants[0].family;
+        if(fams[fam]!==undefined) fams[fam].push({cls,variants});
+      });
+      let html='';
+      ['adversarial','benign','degraded'].forEach(fam=>{
+        if(!fams[fam].length) return;
+        html+=`<div class="family-heading fh-${fam}">${fam}</div>`;
+        fams[fam].forEach(({cls,variants})=>{
+          html+=`<div class="class-card"><div class="class-name">${cls}</div><div style="margin-top:8px">`;
+          variants.forEach(v=>{html+=`<span class="variant-tag">${v.text}</span>`;});
+          html+=`</div></div>`;
+        });
+      });
+      cont.innerHTML=html||'<p style="color:var(--muted)">No variants generated for this name.</p>';
+    });
+}
+
+// ---- MATCHER ----
+function runMatch(){
+  const query=document.getElementById('m-query').value.trim();
+  const candidate=document.getElementById('m-cand').value.trim();
+  if(!query||!candidate){toast('Enter both names');return;}
+  fetch('/api/match',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query,candidate})})
+    .then(r=>r.json()).then(data=>{
+      if(data.error){toast(data.error);return;}
+      const bs=data.baseline_score;
+      const es=data.exact_score;
+      document.getElementById('match-results').innerHTML=`
+        <div class="result-box">
+          <div class="score-row"><span class="score-label">Normalised Query</span><code style="color:var(--accent)">${data.normalised_query}</code></div>
+          <div class="score-row"><span class="score-label">Normalised Candidate</span><code style="color:var(--accent)">${data.normalised_candidate}</code></div>
+        </div>
+        <div class="result-box" style="margin-top:12px">
+          <div class="score-row"><span class="score-label">Baseline Jaro-Winkler</span><span class="score-value" style="color:${recallColor(bs)}">${(bs*100).toFixed(1)}%</span></div>
+          <div class="score-row"><span class="score-label">Exact (Normalised)</span><span class="score-value" style="color:${recallColor(es)}">${(es*100).toFixed(1)}%</span></div>
+        </div>`;
+    });
+}
+
+// ---- BATCH SCREENER ----
+function loadBatchSamples(){
+  document.getElementById('batch-names').value=
+    'Muhammad Al-Zawahiri\nKim Jong Un\nAhmed Hussein\nJohn Smith\nAleksandr Ivanov\nMohammed Al-Ghamdi\nNasser Ibrahim';
+}
+
+function runBatch(){
+  const names=document.getElementById('batch-names').value.trim();
+  if(!names){toast('Enter at least one name');return;}
+  const threshold=parseFloat(document.getElementById('batch-threshold').value);
+  const matcher=document.getElementById('batch-matcher').value;
+  const btn=document.getElementById('batch-run-btn');
+  btn.disabled=true;btn.textContent='Screening…';
+  fetch('/api/batch-screen',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({names,threshold,matcher})
+  }).then(r=>r.json()).then(data=>{
+    btn.disabled=false;btn.textContent='▶ Screen All Names';
+    if(data.error){toast('Error: '+data.error);return;}
+    renderBatchResults(data);
+  }).catch(e=>{btn.disabled=false;btn.textContent='▶ Screen All Names';toast('Request failed');});
+}
+
+function renderBatchResults(data){
+  // Summary cards
+  const hitPct=data.total>0?((data.hits/data.total)*100).toFixed(1):0;
+  document.getElementById('batch-summary').innerHTML=`
+    <div class="grid2" style="margin-bottom:16px">
+      <div class="stat"><div class="stat-val c-red">${data.hits}</div><div class="stat-lbl">🚨 Hits (Fired)</div></div>
+      <div class="stat"><div class="stat-val c-green">${data.misses}</div><div class="stat-lbl">✅ Clear (No Match)</div></div>
+    </div>
+    <div class="stat"><div class="stat-val c-orange">${hitPct}%</div><div class="stat-lbl">Hit Rate · Threshold ${data.threshold} · ${data.matcher}</div></div>`;
+  // Table
+  const tbody=document.getElementById('batch-tbody');
+  tbody.innerHTML='';
+  data.results.forEach((r,i)=>{
+    const sc=r.score;
+    const color=recallColor(sc);
+    tbody.innerHTML+=`<tr>
+      <td style="color:var(--muted);font-size:.8rem">${i+1}</td>
+      <td style="font-weight:500">${r.query}</td>
+      <td><span class="hit-badge ${r.hit?'hit':'clear'}">${r.hit?'🚨 HIT':'✅ CLEAR'}</span></td>
+      <td>
+        <div class="score-mini">
+          <div class="score-mini-bar"><div class="score-mini-fill" style="width:${sc*100}%;background:${color}"></div></div>
+          <span style="color:${color};font-weight:600">${(sc*100).toFixed(1)}%</span>
+        </div>
+      </td>
+      <td style="color:${r.hit?'var(--text)':'var(--muted)'}">${r.matched_entity||'—'}</td>
+    </tr>`;
+  });
+  document.getElementById('batch-results-wrap').style.display='block';
+}
+</script>
+</body>
+</html>
