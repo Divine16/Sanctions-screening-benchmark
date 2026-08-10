@@ -123,7 +123,7 @@ makes no network calls during scoring.
 
 ## The perturbation classes
 
-Eighteen classes across three families. Full rationale and sourcing in
+Nineteen classes across three families. Full rationale and sourcing in
 [docs/METHODOLOGY.md](docs/METHODOLOGY.md).
 
 ### Benign, innocent variation
