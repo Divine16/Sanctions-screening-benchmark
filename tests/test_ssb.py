@@ -56,6 +56,33 @@ class TestPerturbations(unittest.TestCase):
         stripped = "".join(c for c in out[0] if c not in "​‌‍ ⁠")
         self.assertEqual(stripped, "Hussein Nasser")
 
+    def test_abbrev_produces_full_acronym(self):
+        # "Islamic Revolutionary Guard Corps" -> "IRGC"
+        out = perturb.p_abbrev("Islamic Revolutionary Guard Corps", 0)
+        self.assertIn("IRGC", out)
+
+    def test_abbrev_produces_partial_acronym(self):
+        # partial variant keeps the last word of the input
+        out = perturb.p_abbrev("Islamic Revolutionary Guard Corps", 0)
+        self.assertTrue(any("Corps" in v for v in out), out)
+
+    def test_abbrev_skips_particles_and_legal_forms(self):
+        # "Al-Qaeda Organization" — "Al" is skipped, hyphen split gives Q
+        out = perturb.p_abbrev("Al-Qaeda Organization", 0)
+        self.assertIn("QO", out)
+
+    def test_abbrev_returns_empty_for_single_token(self):
+        self.assertEqual(perturb.p_abbrev("Karimov", 0), [])
+
+    def test_abbrev_never_returns_input_unchanged(self):
+        out = perturb.p_abbrev("Islamic Revolutionary Guard Corps", 0)
+        src = "Islamic Revolutionary Guard Corps"
+        for v in out:
+            self.assertNotEqual(v.casefold(), src.casefold())
+
+    def test_abbrev_is_in_benign_family(self):
+        self.assertEqual(perturb.REGISTRY["abbrev"].family, perturb.BENIGN)
+
 
 class TestMatching(unittest.TestCase):
     def test_jaro_winkler_identity(self):
