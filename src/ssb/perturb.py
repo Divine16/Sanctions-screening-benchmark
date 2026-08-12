@@ -262,6 +262,67 @@ def p_case_fold(text: str, seed: int) -> list:
     return _dedupe([text.upper(), text.lower()], text)
 
 
+# Tokens that carry no abbreviation signal — particles, conjunctions,
+# legal-form words. Abbreviating these produces noise, not a realistic variant.
+_ABBREV_SKIP = {
+    "al", "el", "bin", "ibn", "abu", "van", "von", "de", "del", "della",
+    "da", "di", "la", "le", "and", "the", "of", "for", "a", "an",
+    "company", "corporation", "corp", "inc", "ltd", "llc", "group",
+    "co", "sa", "ag", "bv", "gmbh",
+}
+
+
+@register(
+    "abbrev",
+    BENIGN,
+    "Abbreviate substantive tokens to their initial letter — models the common "
+    "data-entry pattern where an organisation name is entered as an acronym "
+    "(Islamic Revolutionary Guard Corps -> IRGC, Al-Qaeda Organization -> AQO). "
+    "Distinct from `initials`, which models personal given-name reduction.",
+)
+def p_abbrev(text: str, seed: int) -> list:
+    """Generate acronym/abbreviation variants of multi-token organisation names.
+
+    Two variants are produced when applicable:
+      1. Full acronym  — every non-skipped token reduced to its initial letter,
+         joined with no separator (e.g. 'Islamic Revolutionary Guard Corps' -> 'IRGC').
+      2. Partial acronym — every non-skipped token except the last abbreviated,
+         last token kept in full (e.g. 'Kongsberg Trading Company' -> 'KT Company').
+    """
+    # Flatten hyphenated compounds so "Al-Qaeda" contributes "A" and "Q".
+    raw_tokens = []
+    for tok in text.split():
+        if "-" in tok:
+            raw_tokens.extend(tok.split("-"))
+        else:
+            raw_tokens.append(tok)
+
+    # Only tokens worth abbreviating: non-trivial, non-skip words.
+    abbrev_candidates = [
+        t for t in raw_tokens
+        if t.casefold() not in _ABBREV_SKIP and len(t) > 1
+    ]
+
+    # Need at least two substantive tokens to form a meaningful acronym.
+    if len(abbrev_candidates) < 2:
+        return []
+
+    out = []
+
+    # 1. Full acronym — "IRGC", "AQO"
+    full = "".join(t[0].upper() for t in abbrev_candidates)
+    out.append(full)
+
+    # 2. Partial — abbreviate all but the last substantive token, keep last word
+    #    of the original input in full so spacing reads naturally.
+    last_word = text.split()[-1]
+    partial_initials = "".join(t[0].upper() for t in abbrev_candidates[:-1])
+    partial = f"{partial_initials} {last_word}"
+    out.append(partial)
+
+    return _dedupe(out, text)
+
+
 # --------------------------------------------------------------------------
 # ADVERSARIAL — deliberate evasion
 # --------------------------------------------------------------------------
