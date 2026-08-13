@@ -62,6 +62,10 @@ number does and does not mean.
 **Honest about its limits.** See [Limitations](#limitations). The precision
 figure is not a production alert-volume estimate and is never presented as one.
 
+## Adopters
+
+See [ADOPTERS.md](ADOPTERS.md). Using this benchmark? Open a PR to add your organisation.
+
 ## Install and run
 
 No installation required.
